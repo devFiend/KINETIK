@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KINETIK — Webcam-Powered Telekinesis Playground
-Application Entry Point with Phase P3 Physics Playground
+Application Entry Point with Phase P4 Telekinetic Interaction Loop
 """
 import argparse
 import os
@@ -15,6 +15,7 @@ from src.camera.webcam import WebcamCapture
 from src.config import (
     COLOR_BACKGROUND,
     COLOR_CYAN_GLOW,
+    COLOR_GOLD_AMBER,
     COLOR_HAZARD_RED,
     COLOR_HUD_TEXT,
     COLOR_VIOLET_FLUX,
@@ -28,11 +29,13 @@ from src.config import (
     TARGET_FPS,
     WINDOW_TITLE,
 )
+from src.game.controller import TelekinesisController
 from src.gestures.detector import GestureDetector
 from src.physics.world import PhysicsWorld
 from src.rendering.cursor import render_all_cursors
 from src.rendering.landmarks import render_hand_skeleton
 from src.rendering.physics_renderer import render_physics_bodies
+from src.rendering.tether import render_energy_tether
 
 
 def run(
@@ -41,7 +44,7 @@ def run(
     mock_camera: bool = False,
     camera_index: int = DEFAULT_CAMERA_INDEX
 ) -> int:
-    """Initialize vision, gesture recognizer, 2D physics engine, and Pygame lifecycle."""
+    """Initialize full telekinetic vision, physics, and Pygame lifecycle."""
     if headless:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -81,16 +84,19 @@ def run(
     physics_world = PhysicsWorld(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
     physics_world.reset_default_playground()
 
+    # Phase P4: Telekinesis Interaction Controller
+    print("[KINETIK] Initializing Telekinesis Controller (Soft Springs & Fling)...")
+    telekinesis_controller = TelekinesisController(physics_world)
+
     running = True
     frame_count = 0
     show_camera_feed = True
     show_skeleton = True
 
-    print("[KINETIK] Phase P3 active. Controls: [SPACE] Spawn Ball, [B]ox, [R]eset, [G]ravity, [M]irror, [ESC/Q]uit")
+    print("[KINETIK] Phase P4 active! Pinch near objects to GRAB, flick to THROW, open palm thrust to PUSH!")
 
     try:
         while running:
-            # Measure delta time for fixed physics sub-stepping
             raw_dt = clock.get_time() / 1000.0
             dt = min(raw_dt, 0.1) if raw_dt > 0 else 1.0 / TARGET_FPS
 
@@ -101,20 +107,16 @@ def run(
                     if event.key in (pygame.K_ESCAPE, pygame.K_q):
                         running = False
                     elif event.key == pygame.K_SPACE:
-                        # Spawn ball at hand location or random top location
                         primary = gesture_detector.get_primary_hand(active_gesture_states if 'active_gesture_states' in locals() else [])
                         sx = primary.screen_pos[0] if primary else random.uniform(200, DEFAULT_WINDOW_WIDTH - 200)
                         sy = primary.screen_pos[1] if primary else 120.0
                         physics_world.spawn_sphere(sx, sy, radius=random.uniform(22, 34))
                     elif event.key == pygame.K_b:
-                        # Spawn crate
                         bx = random.uniform(200, DEFAULT_WINDOW_WIDTH - 200)
                         physics_world.spawn_box(bx, 120.0, size=random.uniform(40, 56))
                     elif event.key == pygame.K_r:
-                        # Reset physics playground
                         physics_world.reset_default_playground()
                     elif event.key == pygame.K_g:
-                        # Toggle zero-gravity
                         physics_world.toggle_zero_gravity()
                     elif event.key == pygame.K_m:
                         webcam.toggle_mirror()
@@ -135,7 +137,10 @@ def run(
             active_gesture_states = gesture_detector.process_hands(hands, now=frame_ts)
             primary_hand = gesture_detector.get_primary_hand(active_gesture_states)
 
-            # 4. Physics Simulation Step
+            # 4. Telekinesis Controller Update (Grab, Hold, Throw, Push)
+            telekinesis_controller.update(active_gesture_states, now=frame_ts)
+
+            # 5. Physics Simulation Step
             physics_world.step(dt)
 
             # --- Presentation Rendering ---
@@ -149,9 +154,19 @@ def run(
                 frame_surf.set_alpha(150)
                 screen.blit(frame_surf, (0, 0))
 
-            # Draw physics bodies (spheres and crates)
+            # Draw physics bodies
             dynamic_bodies = physics_world.get_dynamic_bodies()
             render_physics_bodies(screen, dynamic_bodies)
+
+            # Draw telekinetic energy tethers for active holds
+            active_holds = telekinesis_controller.get_active_holds()
+            for hand_pos, body, _ in active_holds:
+                render_energy_tether(
+                    screen,
+                    hand_pos=hand_pos,
+                    body_pos=(body.position.x, body.position.y),
+                    color=COLOR_CYAN_GLOW
+                )
 
             # Draw skeleton overlay
             if show_skeleton and hands:
@@ -167,32 +182,31 @@ def run(
             render_all_cursors(screen, active_gesture_states, cursor_font)
 
             # --- HUD & Telemetry Overlay ---
-            title_surf = title_font.render("KINETIK // PHASE P3 PHYSICS PLAYGROUND", True, COLOR_CYAN_GLOW)
+            title_surf = title_font.render("KINETIK // PHASE P4 TELEKINESIS CORE", True, COLOR_CYAN_GLOW)
             screen.blit(title_surf, (30, 25))
 
-            # Camera & Physics Status
-            gravity_status = "ZERO-G" if abs(physics_world.gravity) < 1e-3 else f"{int(physics_world.gravity)} px/s²"
+            # Telekinesis State
+            holding_info = f"HOLDING ({len(active_holds)} objs)" if active_holds else "READY TO GRAB"
+            telem_color = COLOR_GOLD_AMBER if active_holds else COLOR_CYAN_GLOW
             status_text = (
-                f"CAM: {'ACTIVE' if webcam.is_available else 'MOCK/OFF'} | "
+                f"STATUS: {holding_info} | "
                 f"PROPS: {len(dynamic_bodies)} | "
-                f"GRAVITY: {gravity_status}"
+                f"CAM: {'ACTIVE' if webcam.is_available else 'MOCK/OFF'}"
             )
-            status_surf = font.render(status_text, True, COLOR_CYAN_GLOW)
+            status_surf = font.render(status_text, True, telem_color)
             screen.blit(status_surf, (30, 60))
 
             # Gesture Telemetry
             if primary_hand:
-                telem_color = COLOR_WHITE_BRIGHT if primary_hand.is_pinched else COLOR_CYAN_GLOW
-                telem_text = (
+                hand_telem = (
                     f"GESTURE: {primary_hand.gesture_type.name} | "
-                    f"PINCH DIST: {primary_hand.pinch_distance:.3f} | "
+                    f"PINCH: {int(primary_hand.pinch_factor * 100)}% | "
                     f"SPEED: {int(primary_hand.speed)} px/s"
                 )
             else:
-                telem_color = (130, 140, 160)
-                telem_text = "GESTURE: NO HAND DETECTED"
+                hand_telem = "GESTURE: NO HAND (Wave hand in front of camera)"
 
-            telem_surf = font.render(telem_text, True, telem_color)
+            telem_surf = font.render(hand_telem, True, COLOR_HUD_TEXT)
             screen.blit(telem_surf, (30, 85))
 
             # Performance stats
@@ -200,8 +214,8 @@ def run(
             perf_surf = status_font.render(perf_text, True, COLOR_HUD_TEXT)
             screen.blit(perf_surf, (30, 115))
 
-            guide_text = "[SPACE] Spawn Ball | [B] Box | [R] Reset | [G] Zero-G | [M] Mirror | [C] Camera | [ESC] Quit"
-            guide_surf = status_font.render(guide_text, True, (120, 140, 160))
+            guide_text = "Pinch near an object to GRAB | Flick hand to THROW | Open-palm thrust to PUSH | [SPACE] Spawn | [R] Reset | [ESC] Quit"
+            guide_surf = status_font.render(guide_text, True, (140, 170, 190))
             screen.blit(guide_surf, (30, DEFAULT_WINDOW_HEIGHT - 35))
 
             pygame.display.flip()
@@ -221,7 +235,7 @@ def run(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P3")
+    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P4")
     parser.add_argument("--headless", action="store_true", help="Run in headless SDL mode")
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")
