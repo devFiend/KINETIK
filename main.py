@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KINETIK — Webcam-Powered Telekinesis Playground
-Application Entry Point with Phase P1 Vision Pipeline
+Application Entry Point with Phase P2 Input Processing & Gesture Engine
 """
 import argparse
 import os
@@ -27,6 +27,8 @@ from src.config import (
     TARGET_FPS,
     WINDOW_TITLE,
 )
+from src.gestures.detector import GestureDetector
+from src.rendering.cursor import render_all_cursors
 from src.rendering.landmarks import render_hand_skeleton
 
 
@@ -36,7 +38,7 @@ def run(
     mock_camera: bool = False,
     camera_index: int = DEFAULT_CAMERA_INDEX
 ) -> int:
-    """Initialize camera, vision engine, and Pygame lifecycle."""
+    """Initialize camera, vision engine, gesture recognizer, and Pygame lifecycle."""
     if headless:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -51,8 +53,9 @@ def run(
     font = pygame.font.SysFont("Consolas", 18)
     title_font = pygame.font.SysFont("Consolas", 24, bold=True)
     status_font = pygame.font.SysFont("Consolas", 14)
+    cursor_font = pygame.font.SysFont("Consolas", 12, bold=True)
 
-    # Initialize Phase P1 Vision Pipeline
+    # Phase P1: Vision Pipeline
     print(f"[KINETIK] Initializing webcam capture on index={camera_index}...")
     webcam = WebcamCapture(
         camera_index=camera_index,
@@ -61,19 +64,21 @@ def run(
         mirror=DEFAULT_MIRROR_MODE,
         mock_mode=mock_camera
     )
-    cam_started = webcam.start()
-    if not cam_started:
-        print(f"[KINETIK WARNING] Webcam failed to start: {webcam.error_message}")
+    webcam.start()
 
     print("[KINETIK] Initializing MediaPipe HandTracker...")
     tracker = HandTracker()
+
+    # Phase P2: Input Processing & Gesture Engine
+    print("[KINETIK] Initializing Gesture Engine (Hysteresis & Adaptive Smoothing)...")
+    gesture_detector = GestureDetector(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
 
     running = True
     frame_count = 0
     show_camera_feed = True
     show_skeleton = True
 
-    print("[KINETIK] Vision loop initialized. Controls: [M]irror, [C]amera toggle, [S]keleton, [ESC/Q]uit")
+    print("[KINETIK] Phase P2 active. Controls: [M]irror, [C]amera toggle, [S]keleton, [ESC/Q]uit")
 
     try:
         while running:
@@ -85,36 +90,35 @@ def run(
                         running = False
                     elif event.key == pygame.K_m:
                         webcam.toggle_mirror()
-                        print(f"[KINETIK] Mirror mode: {webcam.mirror}")
                     elif event.key == pygame.K_c:
                         show_camera_feed = not show_camera_feed
                     elif event.key == pygame.K_s:
                         show_skeleton = not show_skeleton
 
-            # Ingest freshest frame from threaded capture
-            frame_bgr, _ = webcam.get_latest_frame()
+            # 1. Video Ingestion
+            frame_bgr, frame_ts = webcam.get_latest_frame()
             hands = []
 
+            # 2. Vision Inference
             if frame_bgr is not None:
-                # Run MediaPipe hand landmark inference
                 hands = tracker.process_frame(frame_bgr)
 
+            # 3. Gesture Recognition & Coordinate Smoothing
+            gesture_states = gesture_detector.process_hands(hands, now=frame_ts)
+            primary_hand = gesture_detector.get_primary_hand(gesture_states)
+
             # --- Presentation Rendering ---
-            # Fill background
             screen.fill(COLOR_BACKGROUND)
 
-            # Draw camera feed if available and enabled
+            # Draw camera feed
             if show_camera_feed and frame_bgr is not None:
-                # Convert OpenCV BGR to RGB and scale to window surface
                 frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-                # Transpose and convert to Pygame Surface
                 frame_surf = pygame.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
                 frame_surf = pygame.transform.scale(frame_surf, (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
-                # Apply slight dimming so futuristic HUD and effects pop
-                frame_surf.set_alpha(190)
+                frame_surf.set_alpha(170)
                 screen.blit(frame_surf, (0, 0))
 
-            # Draw glowing hand skeleton overlays
+            # Draw skeleton overlay
             if show_skeleton and hands:
                 render_hand_skeleton(
                     screen,
@@ -124,9 +128,11 @@ def run(
                     primary_color=COLOR_CYAN_GLOW
                 )
 
+            # Draw telekinetic targeting reticles and gesture cursors
+            render_all_cursors(screen, gesture_states, cursor_font)
+
             # --- HUD & Telemetry Overlay ---
-            # Title banner
-            title_surf = title_font.render("KINETIK // PHASE P1 VISION ENGINE", True, COLOR_CYAN_GLOW)
+            title_surf = title_font.render("KINETIK // PHASE P2 GESTURE ENGINE", True, COLOR_CYAN_GLOW)
             screen.blit(title_surf, (30, 25))
 
             # Camera Status
@@ -135,21 +141,28 @@ def run(
             cam_surf = font.render(cam_status, True, cam_color)
             screen.blit(cam_surf, (30, 60))
 
-            # Tracking Status
-            track_color = COLOR_VIOLET_FLUX if hands else (140, 150, 170)
-            track_status = f"HANDS DETECTED: {len(hands)}"
-            if hands:
-                hand_info = " | ".join([f"{h.handedness} ({int(h.confidence * 100)}%)" for h in hands])
-                track_status += f" [{hand_info}]"
-            track_surf = font.render(track_status, True, track_color)
-            screen.blit(track_surf, (30, 85))
+            # Gesture Telemetry
+            if primary_hand:
+                telemetry_color = COLOR_WHITE_BRIGHT if primary_hand.is_pinched else COLOR_CYAN_GLOW
+                telemetry_text = (
+                    f"GESTURE: {primary_hand.gesture_type.name} | "
+                    f"PINCH DIST: {primary_hand.pinch_distance:.3f} | "
+                    f"FACTOR: {int(primary_hand.pinch_factor * 100)}% | "
+                    f"SPEED: {int(primary_hand.speed)} px/s"
+                )
+            else:
+                telemetry_color = (130, 140, 160)
+                telemetry_text = "GESTURE: NO HAND DETECTED (Wave hand in front of camera)"
 
-            # Performance & Controls Guide
+            telem_surf = font.render(telemetry_text, True, telemetry_color)
+            screen.blit(telem_surf, (30, 85))
+
+            # Performance stats
             perf_text = f"APP FPS: {clock.get_fps():.1f} | Frame: {frame_count}"
             perf_surf = status_font.render(perf_text, True, COLOR_HUD_TEXT)
             screen.blit(perf_surf, (30, 115))
 
-            guide_text = "Controls: [M] Toggle Mirror | [C] Toggle Video | [S] Toggle Skeleton | [ESC/Q] Quit"
+            guide_text = "Controls: Pinch Thumb+Index to Grab | Flick Hand to Throw | [M]irror | [C]amera | [S]keleton | [ESC] Quit"
             guide_surf = status_font.render(guide_text, True, (120, 140, 160))
             screen.blit(guide_surf, (30, DEFAULT_WINDOW_HEIGHT - 35))
 
@@ -170,7 +183,7 @@ def run(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P1")
+    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P2")
     parser.add_argument("--headless", action="store_true", help="Run in headless SDL mode")
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")
