@@ -16,19 +16,20 @@ DEFAULT_CAM_HEIGHT: int = 480
 DEFAULT_MIRROR_MODE: bool = True
 
 # Gesture & Telekinesis Tuning
-PINCH_ENTER_THRESHOLD: float = 0.055  # Distance between thumb & index tip to enter pinch
-PINCH_EXIT_THRESHOLD: float = 0.085   # Distance to exit pinch (hysteresis)
+# Calibrated for natural webcam distances (0.5m - 1.2m)
+PINCH_ENTER_THRESHOLD: float = 0.080  # Distance between thumb & index tip to enter pinch (more forgiving)
+PINCH_EXIT_THRESHOLD: float = 0.120   # Distance to exit pinch (hysteresis to prevent accidental drop)
 PINCH_DEBOUNCE_FRAMES: int = 2        # Consecutive frames required to confirm state change
-SELECTION_RADIUS_PX: float = 80.0     # Radius within which an object can be selected
+SELECTION_RADIUS_PX: float = 240.0    # Expanded reach radius so player can grab balls from desk/floor
 VELOCITY_HISTORY_FRAMES: int = 5      # Rolling window size for throw velocity calculation
 MAX_RELEASE_VELOCITY: float = 2500.0  # Velocity clamp to prevent boundary tunneling (px/s)
-THROW_FORCE_MULTIPLIER: float = 1.4   # Dynamic fling boost multiplier
-TRACKING_LOSS_GRACE_MS: int = 300     # Grace period before dropping held object on tracking dropout
+THROW_FORCE_MULTIPLIER: float = 1.5   # Dynamic fling boost multiplier
+TRACKING_LOSS_GRACE_MS: int = 400     # Grace period before dropping held object on tracking dropout
 
 # Physics Simulation Defaults
-DEFAULT_GRAVITY_Y: float = 900.0      # Downward gravitational acceleration (px/s^2)
-SPRING_STIFFNESS: float = 350.0       # Telekinetic tether spring stiffness (N/m)
-SPRING_DAMPING: float = 25.0          # Spring damping coefficient (N*s/m)
+DEFAULT_GRAVITY_Y: float = 800.0      # Downward gravitational acceleration (px/s^2)
+SPRING_STIFFNESS: float = 480.0       # Snappy, tactile telekinetic tether spring stiffness (N/m)
+SPRING_DAMPING: float = 35.0          # Spring damping coefficient (N*s/m)
 
 # Cyberpunk / Control-Room Color Palette (RGB)
 COLOR_BACKGROUND: Tuple[int, int, int] = (11, 13, 19)       # Deep Obsidian

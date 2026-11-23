@@ -261,9 +261,14 @@ def run(
             if isinstance(current_mode, TargetRushMode):
                 render_target_drones(render_surface, current_mode.targets)
 
+            # Check targeted body near hand cursor
+            targeted_body = None
+            if primary_hand:
+                targeted_body, _ = telekinesis_controller.find_nearest_body(primary_hand.screen_pos)
+
             # Draw physics bodies
             dynamic_bodies = physics_world.get_dynamic_bodies()
-            render_physics_bodies(render_surface, dynamic_bodies)
+            render_physics_bodies(render_surface, dynamic_bodies, targeted_body=targeted_body)
 
             # Draw energy tethers
             active_holds = telekinesis_controller.get_active_holds()
@@ -291,12 +296,15 @@ def run(
             # Draw gesture cursors
             render_all_cursors(render_surface, active_gesture_states, fonts["cursor"])
 
-            # Draw HUD (Score, Timer, Rank, Popups)
+            # Draw HUD (Score, Timer, Rank, Popups, Guidance)
             render_game_hud(
                 render_surface,
                 current_mode,
                 scoring_engine,
                 progression_manager,
+                primary_hand,
+                targeted_body,
+                bool(active_holds),
                 fonts,
                 DEFAULT_WINDOW_WIDTH,
                 DEFAULT_WINDOW_HEIGHT

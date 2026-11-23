@@ -7,6 +7,8 @@ import pymunk
 from src.config import (
     MAX_RELEASE_VELOCITY,
     SELECTION_RADIUS_PX,
+    SPRING_DAMPING,
+    SPRING_STIFFNESS,
     THROW_FORCE_MULTIPLIER,
     TRACKING_LOSS_GRACE_MS,
 )
@@ -41,7 +43,19 @@ class HandTelekinesis:
         self.hold_start_time = now
         self.last_seen_time = now
         self.last_cursor_pos = cursor_pos
-        self.joint = TelekineticJoint(self.space, target_body, cursor_pos)
+        self.joint = TelekineticJoint(
+            self.space,
+            target_body,
+            cursor_pos,
+            stiffness=SPRING_STIFFNESS,
+            damping=SPRING_DAMPING
+        )
+
+        # Give dynamic body an initial upward impulse to immediately unstick from floor
+        target_body.apply_impulse_at_world_point(
+            pymunk.Vec2d(0.0, -120.0 * target_body.mass),
+            target_body.position
+        )
 
     def release(self, throw_velocity: Tuple[float, float]) -> Optional[pymunk.Body]:
         """Release held body and impart throw velocity vector with multiplier."""
@@ -52,7 +66,6 @@ class HandTelekinesis:
 
         if self.held_body:
             vx, vy = throw_velocity
-            # Apply throw force multiplier and clamp
             speed = math.hypot(vx, vy)
             if speed > 0:
                 boosted_speed = min(MAX_RELEASE_VELOCITY, speed * THROW_FORCE_MULTIPLIER)
@@ -108,13 +121,13 @@ class TelekinesisController:
             tk.last_seen_time = t
             tk.last_cursor_pos = state.screen_pos
 
-            # 1. Grab Trigger: Just pinched near an interactable object
-            if state.just_pinched and not tk.is_holding:
+            # 1. Grab Trigger: Whenever fingers are pinched and not already holding, grab nearest body within reach!
+            if state.is_pinched and not tk.is_holding:
                 nearest_body, dist = self.find_nearest_body(state.screen_pos)
                 if nearest_body:
                     tk.grab(nearest_body, state.screen_pos, t)
 
-            # 2. Hold Update: Update kinematic anchor position
+            # 2. Hold Update: Move kinematic anchor to latest hand position
             elif tk.is_holding and state.is_pinched:
                 tk.joint.update_hand_position(state.screen_pos)
 
@@ -124,21 +137,21 @@ class TelekinesisController:
 
             # 4. Force Push Shockwave: Rapid open palm thrust
             elif state.gesture_type == GestureType.PUSH and not tk.is_holding:
-                self._apply_force_push(state.screen_pos, push_radius=250.0, impulse_strength=800.0)
+                self._apply_force_push(state.screen_pos, push_radius=280.0, impulse_strength=900.0)
 
         # 5. Handle tracking dropout grace period for missing hands
         for handedness, tk in self._hands.items():
             if handedness not in active_handedness and tk.is_holding:
                 elapsed_dropout = (t - tk.last_seen_time) * 1000.0
                 if elapsed_dropout > TRACKING_LOSS_GRACE_MS:
-                    # Grace period expired -> safely release without violent throw
+                    # Grace period expired -> safely release without violent fling
                     tk.release((0.0, 0.0))
 
     def _apply_force_push(
         self,
         origin: Tuple[float, float],
-        push_radius: float = 250.0,
-        impulse_strength: float = 800.0
+        push_radius: float = 280.0,
+        impulse_strength: float = 900.0
     ) -> int:
         """Cast radial impulse wave repelling unheld nearby dynamic bodies."""
         ox, oy = origin
@@ -151,7 +164,6 @@ class TelekinesisController:
             dist = math.hypot(dx, dy)
 
             if 10.0 < dist <= push_radius:
-                # Radial impulse scaled by distance
                 factor = (1.0 - dist / push_radius) * impulse_strength
                 nx, ny = dx / dist, dy / dist
                 body.apply_impulse_at_world_point(
