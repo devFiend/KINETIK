@@ -41,6 +41,7 @@ from src.config import (
 )
 from src.game.audio import ProceduralAudioEngine
 from src.game.controller import TelekinesisController
+from src.game.dual_hand import DualHandSuperpower, DualHandSynthesizer
 from src.game.modes import FreePlayMode, GameModeState, ModeType, TargetRushMode
 from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
@@ -114,6 +115,10 @@ def run(
     # Phase P4: Telekinesis Controller
     print("[KINETIK] Initializing Telekinesis Controller...")
     telekinesis_controller = TelekinesisController(physics_world)
+
+    # Phase 2.0: Dual-Hand Superpower Synthesizer
+    print("[KINETIK 2.0] Initializing Dual-Hand Synthesizer (Prop Clash, Vortex, Shield)...")
+    dual_hand_synthesizer = DualHandSynthesizer(physics_world)
 
     # Phase P5: Sensory Juice
     print("[KINETIK] Initializing Particle Pool & Audio Engine...")
@@ -222,6 +227,25 @@ def run(
             # 4. Telekinesis Controller Update
             telekinesis_controller.update(active_gesture_states, now=frame_ts)
 
+            # 4b. Dual-Hand Combos & Superpowers
+            dual_events = dual_hand_synthesizer.process_dual_hands(
+                active_gesture_states,
+                active_holds=telekinesis_controller.get_active_holds(),
+                now=frame_ts
+            )
+            for dev in dual_events:
+                screen_shake.add_trauma(dev.screen_shake_trauma)
+                if dev.power_type == DualHandSuperpower.PROP_CLASH:
+                    audio_engine.play_clash()
+                    particle_pool.emit_clash_nova(dev.position[0], dev.position[1])
+                    scoring_engine.register_hit(dev.bonus_score, 1400.0, dev.position, COLOR_GOLD_AMBER)
+                elif dev.power_type == DualHandSuperpower.SINGULARITY_RIFT:
+                    audio_engine.play_vortex()
+                    scoring_engine.register_hit(dev.bonus_score, 700.0, dev.position, COLOR_VIOLET_FLUX)
+                elif dev.power_type == DualHandSuperpower.DUAL_TIDAL_WAVE:
+                    audio_engine.play_push()
+                    particle_pool.emit_clash_nova(dev.position[0], dev.position[1])
+
             # 5. Game Mode & Scoring Update
             current_mode.update(dt)
             scoring_engine.update(dt)
@@ -279,6 +303,17 @@ def run(
                     body_pos=(body.position.x, body.position.y),
                     color=COLOR_CYAN_GLOW
                 )
+
+            # Draw Singularity Vortex & Suction Motes
+            if dual_hand_synthesizer.active_singularity:
+                dual_hand_synthesizer.active_singularity.draw(render_surface)
+                particle_pool.emit_singularity_motes(
+                    dual_hand_synthesizer.active_singularity.center[0],
+                    dual_hand_synthesizer.active_singularity.center[1]
+                )
+
+            # Draw Kinetic Forcefield Shield
+            dual_hand_synthesizer.shield.draw(render_surface)
 
             # Draw particles
             particle_pool.draw(render_surface)

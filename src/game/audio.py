@@ -62,6 +62,23 @@ class ProceduralAudioEngine:
         stereo = np.column_stack((wave, wave))
         self._impact_sound = pygame.sndarray.make_sound(stereo)
 
+        # 4. Clash Explosion: Deep thunder detonation with resonant frequencies (0.4s)
+        duration = 0.4
+        t = np.linspace(0.0, duration, int(self.sample_rate * duration), endpoint=False)
+        noise = np.random.uniform(-0.35, 0.35, len(t))
+        envelope = np.exp(-9.0 * t)
+        wave = ((np.sin(2.0 * np.pi * 65.0 * t) + noise) * envelope * 0.7 * 32767).astype(np.int16)
+        stereo = np.column_stack((wave, wave))
+        self._clash_sound = pygame.sndarray.make_sound(stereo)
+
+        # 5. Singularity Vortex: Pulsing eerie low-frequency sine modulation (0.5s)
+        duration = 0.5
+        t = np.linspace(0.0, duration, int(self.sample_rate * duration), endpoint=False)
+        mod = 1.0 + 0.3 * np.sin(2.0 * np.pi * 7.0 * t)
+        wave = (np.sin(2.0 * np.pi * 95.0 * t * mod) * 0.45 * 32767).astype(np.int16)
+        stereo = np.column_stack((wave, wave))
+        self._vortex_sound = pygame.sndarray.make_sound(stereo)
+
     def toggle_mute(self) -> bool:
         """Toggle mute state."""
         self.muted = not self.muted
@@ -84,6 +101,18 @@ class ProceduralAudioEngine:
             vol_scale = min(1.0, max(0.2, (impulse - 50.0) / 750.0))
             self._impact_sound.set_volume(self.volume * vol_scale)
             self._impact_sound.play()
+
+    def play_clash(self) -> None:
+        """Play mid-air prop clash explosion sound."""
+        if self._initialized and not self.muted and self._clash_sound:
+            self._clash_sound.set_volume(self.volume * 0.95)
+            self._clash_sound.play()
+
+    def play_vortex(self) -> None:
+        """Play gravitational singularity rift hum."""
+        if self._initialized and not self.muted and self._vortex_sound:
+            self._vortex_sound.set_volume(self.volume * 0.8)
+            self._vortex_sound.play()
 
     def play_throw(self, speed: float) -> None:
         """Synthesize dynamic whoosh pitch-scaled to throw velocity."""

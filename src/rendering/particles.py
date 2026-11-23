@@ -109,6 +109,35 @@ class ParticlePool:
         vy = random.uniform(-15.0, 15.0)
         p.spawn(x, y, vx, vy, color, radius=radius, lifetime=0.25)
 
+    def emit_clash_nova(self, x: float, y: float) -> None:
+        """Emit high-energy multi-colored particle nova on dual-hand prop clash."""
+        colors = [COLOR_GOLD_AMBER, COLOR_VIOLET_FLUX, COLOR_WHITE_BRIGHT, COLOR_CYAN_GLOW]
+        for _ in range(48):
+            p = self._get_particle()
+            angle = random.uniform(0.0, 2.0 * math.pi)
+            speed = random.uniform(150.0, 650.0)
+            p.spawn(
+                x, y,
+                vx=math.cos(angle) * speed,
+                vy=math.sin(angle) * speed,
+                color=random.choice(colors),
+                radius=random.uniform(3.0, 6.0),
+                lifetime=random.uniform(0.4, 0.8)
+            )
+
+    def emit_singularity_motes(self, cx: float, cy: float) -> None:
+        """Emit inward-spiral suction motes for the black hole vortex."""
+        for _ in range(6):
+            p = self._get_particle()
+            angle = random.uniform(0.0, 2.0 * math.pi)
+            dist = random.uniform(120.0, 320.0)
+            sx = cx + math.cos(angle) * dist
+            sy = cy + math.sin(angle) * dist
+            # Aim inward towards center with tangential spin
+            vx = -math.cos(angle) * 350.0 - math.sin(angle) * 120.0
+            vy = -math.sin(angle) * 350.0 + math.cos(angle) * 120.0
+            p.spawn(sx, sy, vx, vy, COLOR_VIOLET_FLUX, radius=random.uniform(2.0, 4.0), lifetime=0.45)
+
     def update(self, dt: float) -> int:
         """Update all active particles. Returns count of active particles."""
         active_count = 0
