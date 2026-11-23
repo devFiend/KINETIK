@@ -138,6 +138,22 @@ class ParticlePool:
             vy = -math.sin(angle) * 350.0 + math.cos(angle) * 120.0
             p.spawn(sx, sy, vx, vy, COLOR_VIOLET_FLUX, radius=random.uniform(2.0, 4.0), lifetime=0.45)
 
+    def emit_slice_sparks(self, x: float, y: float, count: int = 24) -> None:
+        """Emit high-velocity blade spark showers along cutting plane."""
+        colors = [COLOR_CYAN_GLOW, COLOR_WHITE_BRIGHT, COLOR_GOLD_AMBER]
+        for _ in range(count):
+            p = self._get_particle()
+            angle = random.uniform(0.0, 2.0 * math.pi)
+            speed = random.uniform(250.0, 750.0)
+            p.spawn(
+                x, y,
+                vx=math.cos(angle) * speed,
+                vy=math.sin(angle) * speed,
+                color=random.choice(colors),
+                radius=random.uniform(2.0, 4.5),
+                lifetime=random.uniform(0.15, 0.35)
+            )
+
     def update(self, dt: float) -> int:
         """Update all active particles. Returns count of active particles."""
         active_count = 0

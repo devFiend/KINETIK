@@ -13,6 +13,7 @@ from src.config import (
     COLOR_WHITE_BRIGHT,
 )
 from src.game.modes import BaseGameMode, GameModeState, ModeType, TargetRushMode
+from src.game.stack_mode import TheStackMode
 from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
 from src.gestures.detector import HandGestureState
@@ -130,6 +131,59 @@ def render_game_hud(
 
             surface.blit(font.render("Press [R] or [SPACE] to Restart Round", True, COLOR_CYAN_GLOW), (px + 95, py + 280))
 
+    elif isinstance(mode, TheStackMode):
+        # 1. Altitude & Tier Header
+        cx = screen_width * 0.5
+        floor_y = screen_height - 10.0
+        target_y = floor_y - mode.target_altitude
+        current_y = floor_y - mode.current_altitude
+
+        # Draw Altitude Target Laser Line across construction zone
+        zone_x1 = int(cx - 240.0)
+        zone_x2 = int(cx + 240.0)
+        if target_y > 20:
+            pygame.draw.line(surface, COLOR_GOLD_AMBER, (zone_x1, int(target_y)), (zone_x2, int(target_y)), 2)
+            lbl = small_font.render(f"--- TIER {mode.current_tier} GOAL: {mode.target_altitude:.0f} PX ---", True, COLOR_GOLD_AMBER)
+            surface.blit(lbl, (zone_x1 + 10, int(target_y) - 16))
+
+        # Draw Current Stack Line
+        if mode.current_altitude > 10.0:
+            alt_color = COLOR_CYAN_GLOW if mode.is_stable else COLOR_HAZARD_RED
+            pygame.draw.line(surface, alt_color, (zone_x1, int(current_y)), (zone_x2, int(current_y)), 1)
+
+        # Right Telemetry HUD Card
+        surface.blit(big_font.render(f"TIER {mode.current_tier} / {mode.max_tier}", True, COLOR_GOLD_AMBER), (screen_width - 260, 22))
+        surface.blit(font.render(f"HEIGHT: {mode.current_altitude:.0f} px", True, COLOR_WHITE_BRIGHT), (screen_width - 260, 60))
+        surface.blit(small_font.render(f"RECORD: {mode.record_altitude:.0f} px", True, COLOR_CYAN_GLOW), (screen_width - 260, 88))
+
+        # Stability Indicator
+        stab_str = "STABLE" if mode.is_stable else "UNSTABLE / MOVING"
+        stab_color = COLOR_CYAN_GLOW if mode.is_stable else COLOR_HAZARD_RED
+        surface.blit(small_font.render(f"STATE: {stab_str}", True, stab_color), (screen_width - 260, 114))
+
+        # Hold Meter Bar
+        gauge_w = 160
+        gauge_h = 8
+        gx, gy = screen_width - 260, 138
+        pygame.draw.rect(surface, (30, 40, 60), (gx, gy, gauge_w, gauge_h))
+        fill_w = int(gauge_w * mode.hold_progress)
+        if fill_w > 0:
+            bar_color = COLOR_GOLD_AMBER if mode.hold_progress >= 1.0 else COLOR_CYAN_GLOW
+            pygame.draw.rect(surface, bar_color, (gx, gy, fill_w, gauge_h))
+        surface.blit(small_font.render(f"HOLD: {int(mode.hold_progress * 100)}%", True, COLOR_HUD_TEXT), (screen_width - 260, 150))
+
+        # Floating scores
+        for fs in scoring.floating_scores:
+            pop_surf = font.render(f"+{fs.points}", True, fs.color)
+            surface.blit(pop_surf, (int(fs.x), int(fs.y)))
+
+        # Tier Cleared Celebration Banner
+        if mode.recent_checkpoint_event:
+            banner_text = f"★ TIER {mode.recent_checkpoint_event.tier} BALANCED! +{mode.recent_checkpoint_event.bonus_points} XP ★"
+            banner_surf = big_font.render(banner_text, True, COLOR_GOLD_AMBER)
+            bx = (screen_width - banner_surf.get_width()) // 2
+            surface.blit(banner_surf, (bx, 140))
+
 
 def render_target_drones(surface: pygame.Surface, targets: List[TargetDrone]) -> None:
     """Render floating animated target drones with rotating crosshairs and pulsing cores."""
@@ -153,3 +207,21 @@ def render_target_drones(surface: pygame.Surface, targets: List[TargetDrone]) ->
             x2 = int(tx + math.cos(a) * (r + 8))
             y2 = int(ty + math.sin(a) * (r + 8))
             pygame.draw.line(surface, drone.color, (x1, y1), (x2, y2), 2)
+
+
+def render_blade_trails(
+    surface: pygame.Surface,
+    trails: List[Tuple[Tuple[float, float], Tuple[float, float], float]]
+) -> None:
+    """Render high-speed neon slice trails with dynamic alpha."""
+    for p1, p2, alpha in trails:
+        if alpha <= 0.0:
+            continue
+        r = min(255, int(COLOR_WHITE_BRIGHT[0] * alpha))
+        g = min(255, int(COLOR_CYAN_GLOW[1] * alpha))
+        b = min(255, int(COLOR_CYAN_GLOW[2] * alpha))
+        p1_i = (int(p1[0]), int(p1[1]))
+        p2_i = (int(p2[0]), int(p2[1]))
+        pygame.draw.line(surface, (r, g, b), p1_i, p2_i, max(2, int(6 * alpha)))
+        pygame.draw.line(surface, COLOR_WHITE_BRIGHT, p1_i, p2_i, max(1, int(2 * alpha)))
+

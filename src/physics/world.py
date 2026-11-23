@@ -112,6 +112,10 @@ class PhysicsWorld:
         """Convenience spawner for a kinetic box."""
         return ObjectFactory.create_box(self.space, x, y, width=size, height=size)
 
+    def spawn_plank(self, x: float, y: float, width: float = 120.0, height: float = 24.0) -> pymunk.Body:
+        """Convenience spawner for a kinetic balancing plank."""
+        return ObjectFactory.create_box(self.space, x, y, width=width, height=height, mass=2.5, friction=0.9)
+
     def clear_dynamic_bodies(self) -> None:
         """Remove all dynamic bodies and their attached shapes/constraints."""
         for body in list(self.space.bodies):

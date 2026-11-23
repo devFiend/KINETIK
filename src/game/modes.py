@@ -14,6 +14,7 @@ from src.physics.world import PhysicsWorld
 class ModeType(Enum):
     FREE_PLAY = "Free Play (Sandbox)"
     TARGET_RUSH = "Target Rush (60s Arcade)"
+    THE_STACK = "The Stack (Zen Tower Balance)"
 
 
 class GameModeState(Enum):

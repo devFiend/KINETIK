@@ -108,6 +108,43 @@ class ProceduralAudioEngine:
             self._clash_sound.set_volume(self.volume * 0.95)
             self._clash_sound.play()
 
+    def play_slice(self) -> None:
+        """Synthesize sharp supersonic katana / kinetic blade slice whoosh."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.14
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            freq = np.linspace(1400.0, 280.0, len(t))
+            noise = np.random.uniform(-0.25, 0.25, len(t))
+            envelope = np.exp(-t * 22.0)
+            wave = ((np.sin(2.0 * np.pi * freq * t) + noise) * envelope * 0.5 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.85)
+            sound.play()
+        except Exception:
+            pass
+
+    def play_chime(self) -> None:
+        """Synthesize soothing harmonic crystal chime for Zen tower tier clear."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.70
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            env = np.exp(-t * 4.5)
+            # Dual crystal harmonics: 528 Hz (Love frequency) + 1056 Hz overtone
+            tone1 = np.sin(2.0 * np.pi * 528.0 * t)
+            tone2 = np.sin(2.0 * np.pi * 1056.0 * t) * 0.4
+            wave = ((tone1 + tone2) * env * 0.45 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.9)
+            sound.play()
+        except Exception:
+            pass
+
     def play_vortex(self) -> None:
         """Play gravitational singularity rift hum."""
         if self._initialized and not self.muted and self._vortex_sound:

@@ -43,10 +43,12 @@ from src.game.audio import ProceduralAudioEngine
 from src.game.controller import TelekinesisController
 from src.game.dual_hand import DualHandSuperpower, DualHandSynthesizer
 from src.game.modes import FreePlayMode, GameModeState, ModeType, TargetRushMode
+from src.game.stack_mode import TheStackMode
 from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
 from src.gestures.detector import GestureDetector, GestureType
 from src.physics.collisions import CollisionEvent
+from src.physics.slice import KineticBlade
 from src.physics.world import PhysicsWorld
 from src.rendering.cursor import render_all_cursors
 from src.rendering.effects import ScreenShake
@@ -55,7 +57,7 @@ from src.rendering.particles import ParticlePool
 from src.rendering.physics_renderer import render_physics_bodies
 from src.rendering.tether import render_energy_tether
 from src.storage.save_manager import SaveManager
-from src.ui.hud import render_game_hud, render_target_drones
+from src.ui.hud import render_blade_trails, render_game_hud, render_target_drones
 
 
 def run(
@@ -126,14 +128,27 @@ def run(
     screen_shake = ScreenShake(max_offset_px=12.0)
     audio_engine = ProceduralAudioEngine()
 
-    # Phase P6: Scoring & Game Modes
+    # Phase P6 & 2.0: Scoring & Game Modes
     print("[KINETIK] Initializing Scoring Engine & Game Modes...")
     scoring_engine = ScoringEngine()
     free_play_mode = FreePlayMode(physics_world, scoring_engine)
     target_rush_mode = TargetRushMode(physics_world, scoring_engine, round_duration_sec=60.0)
+    stack_mode = TheStackMode(physics_world, scoring_engine)
 
-    current_mode = target_rush_mode if start_mode.lower() == "target_rush" else free_play_mode
+    available_modes = [free_play_mode, target_rush_mode, stack_mode]
+    if start_mode.lower() == "stack":
+        mode_idx = 2
+    elif start_mode.lower() == "target_rush":
+        mode_idx = 1
+    else:
+        mode_idx = 0
+
+    current_mode = available_modes[mode_idx]
     current_mode.start()
+
+    # KINETIK 2.0: Kinetic Blade Slicing Engine
+    kinetic_blade = KineticBlade(physics_world.space)
+    last_checkpoint_tier_announced = 0
 
     # Wire collision events for prop impacts
     def on_physics_collision(event: CollisionEvent) -> None:
@@ -170,7 +185,8 @@ def run(
                     if event.key in (pygame.K_ESCAPE, pygame.K_q):
                         running = False
                     elif event.key == pygame.K_TAB:
-                        current_mode = free_play_mode if current_mode is target_rush_mode else target_rush_mode
+                        mode_idx = (mode_idx + 1) % len(available_modes)
+                        current_mode = available_modes[mode_idx]
                         current_mode.start()
                         round_ended_handled = False
                     elif event.key in (pygame.K_r, pygame.K_SPACE) and current_mode.state == GameModeState.ROUND_OVER:
@@ -246,6 +262,25 @@ def run(
                     audio_engine.play_push()
                     particle_pool.emit_clash_nova(dev.position[0], dev.position[1])
 
+            # 4c. KINETIK 2.0: Kinetic Blade Gesture Slicing
+            kinetic_blade.update_trails(dt)
+            for state in active_gesture_states:
+                cuts = kinetic_blade.process_hand_slicing(state, dt, now=frame_ts)
+                for cut in cuts:
+                    screen_shake.add_trauma(0.35 if cut.sliced_target else 0.22)
+                    audio_engine.play_slice()
+                    particle_pool.emit_slice_sparks(cut.cut_point[0], cut.cut_point[1])
+                    scoring_engine.register_hit(cut.bonus_score, 1200.0, cut.cut_point, COLOR_WHITE_BRIGHT)
+                    progression_manager.unlock_achievement("ACH_CYBER_SLICE")
+
+            # Check Stack Mode checkpoint chime
+            if isinstance(current_mode, TheStackMode) and current_mode.recent_checkpoint_event:
+                if current_mode.recent_checkpoint_event.tier != last_checkpoint_tier_announced:
+                    last_checkpoint_tier_announced = current_mode.recent_checkpoint_event.tier
+                    audio_engine.play_chime()
+                    screen_shake.add_trauma(0.25)
+                    particle_pool.emit_burst(DEFAULT_WINDOW_WIDTH * 0.5, 200.0, count=36, color=COLOR_GOLD_AMBER)
+
             # 5. Game Mode & Scoring Update
             current_mode.update(dt)
             scoring_engine.update(dt)
@@ -315,6 +350,9 @@ def run(
             # Draw Kinetic Forcefield Shield
             dual_hand_synthesizer.shield.draw(render_surface)
 
+            # Draw Kinetic Blade laser trails
+            render_blade_trails(render_surface, kinetic_blade.active_trails)
+
             # Draw particles
             particle_pool.draw(render_surface)
 
@@ -374,7 +412,7 @@ def main():
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")
     parser.add_argument("--camera", type=int, default=DEFAULT_CAMERA_INDEX, help="Camera device index")
-    parser.add_argument("--mode", type=str, default="target_rush", choices=["target_rush", "free_play"], help="Game mode")
+    parser.add_argument("--mode", type=str, default="target_rush", choices=["target_rush", "free_play", "stack"], help="Game mode")
     args = parser.parse_args()
 
     return run(
