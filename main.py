@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KINETIK — Webcam-Powered Telekinesis Playground
-Application Entry Point with Phase P6 Game Modes & Scoring Engine (Target Rush & Free Play)
+Application Entry Point with Phase P7 Progression, Unlocks & Local Save
 """
 import argparse
 import os
@@ -32,6 +32,7 @@ from src.config import (
 from src.game.audio import ProceduralAudioEngine
 from src.game.controller import TelekinesisController
 from src.game.modes import FreePlayMode, GameModeState, ModeType, TargetRushMode
+from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
 from src.gestures.detector import GestureDetector, GestureType
 from src.physics.collisions import CollisionEvent
@@ -42,6 +43,7 @@ from src.rendering.landmarks import render_hand_skeleton
 from src.rendering.particles import ParticlePool
 from src.rendering.physics_renderer import render_physics_bodies
 from src.rendering.tether import render_energy_tether
+from src.storage.save_manager import SaveManager
 from src.ui.hud import render_game_hud, render_target_drones
 
 
@@ -52,7 +54,7 @@ def run(
     camera_index: int = DEFAULT_CAMERA_INDEX,
     start_mode: str = "target_rush"
 ) -> int:
-    """Initialize camera, vision, physics, game modes, scoring, and Pygame lifecycle."""
+    """Initialize camera, vision, physics, game modes, progression, and Pygame lifecycle."""
     if headless:
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -72,6 +74,10 @@ def run(
         "small": pygame.font.SysFont("Consolas", 14),
         "cursor": pygame.font.SysFont("Consolas", 12, bold=True),
     }
+
+    # Storage & Progression (Phase P7)
+    save_manager = SaveManager()
+    progression_manager = ProgressionManager(save_manager)
 
     # Phase P1: Vision Pipeline
     print(f"[KINETIK] Initializing webcam capture on index={camera_index}...")
@@ -111,7 +117,6 @@ def run(
     free_play_mode = FreePlayMode(physics_world, scoring_engine)
     target_rush_mode = TargetRushMode(physics_world, scoring_engine, round_duration_sec=60.0)
 
-    # Active mode
     current_mode = target_rush_mode if start_mode.lower() == "target_rush" else free_play_mode
     current_mode.start()
 
@@ -134,8 +139,9 @@ def run(
     frame_count = 0
     show_camera_feed = True
     show_skeleton = True
+    round_ended_handled = False
 
-    print(f"[KINETIK] Phase P6 active in {current_mode.mode_type.value}! Controls: [TAB] Switch Mode | [R] Restart | [SPACE] Spawn | [ESC] Quit")
+    print(f"[KINETIK] Phase P7 active! Rank: {progression_manager.current_rank.name} | Total XP: {progression_manager.profile.total_xp:,}")
 
     try:
         while running:
@@ -149,11 +155,12 @@ def run(
                     if event.key in (pygame.K_ESCAPE, pygame.K_q):
                         running = False
                     elif event.key == pygame.K_TAB:
-                        # Switch modes between Free Play and Target Rush
                         current_mode = free_play_mode if current_mode is target_rush_mode else target_rush_mode
                         current_mode.start()
+                        round_ended_handled = False
                     elif event.key in (pygame.K_r, pygame.K_SPACE) and current_mode.state == GameModeState.ROUND_OVER:
                         current_mode.start()
+                        round_ended_handled = False
                     elif event.key == pygame.K_SPACE:
                         primary = gesture_detector.get_primary_hand(active_gesture_states if 'active_gesture_states' in locals() else [])
                         sx = primary.screen_pos[0] if primary else random.uniform(200, DEFAULT_WINDOW_WIDTH - 200)
@@ -164,6 +171,7 @@ def run(
                         physics_world.spawn_box(bx, 120.0, size=random.uniform(40, 56))
                     elif event.key == pygame.K_r:
                         current_mode.reset()
+                        round_ended_handled = False
                         screen_shake.add_trauma(0.3)
                     elif event.key == pygame.K_g:
                         physics_world.toggle_zero_gravity()
@@ -186,13 +194,16 @@ def run(
             active_gesture_states = gesture_detector.process_hands(hands, now=frame_ts)
             primary_hand = gesture_detector.get_primary_hand(active_gesture_states)
 
-            # Audio triggers on gesture state changes
+            # Audio triggers & Achievements on gesture state changes
             for state in active_gesture_states:
                 if state.just_pinched:
                     audio_engine.play_grab()
                 elif state.just_released and state.speed > 300.0:
                     audio_engine.play_throw(state.speed)
                     scoring_engine.register_throw()
+                    progression_manager.unlock_achievement("ACH_FIRST_FLING")
+                    if state.speed >= 1800.0:
+                        progression_manager.unlock_achievement("ACH_MACH_FLING")
                 elif state.gesture_type == GestureType.PUSH:
                     audio_engine.play_push()
                     screen_shake.add_trauma(0.2)
@@ -204,6 +215,15 @@ def run(
             # 5. Game Mode & Scoring Update
             current_mode.update(dt)
             scoring_engine.update(dt)
+
+            # Record round score when round ends
+            if current_mode.state == GameModeState.ROUND_OVER and not round_ended_handled:
+                round_ended_handled = True
+                progression_manager.record_round_results(
+                    final_score=scoring_engine.score,
+                    total_hits=scoring_engine.total_hits,
+                    max_combo=scoring_engine.max_combo
+                )
 
             # 6. Physics Simulation Step
             physics_world.step(dt)
@@ -261,18 +281,18 @@ def run(
             # Draw gesture cursors
             render_all_cursors(render_surface, active_gesture_states, fonts["cursor"])
 
-            # Draw HUD (Score, Timer, Multipliers, Popups)
+            # Draw HUD (Score, Timer, Rank, Popups)
             render_game_hud(
                 render_surface,
                 current_mode,
                 scoring_engine,
+                progression_manager,
                 fonts,
                 DEFAULT_WINDOW_WIDTH,
                 DEFAULT_WINDOW_HEIGHT
             )
 
-            # Controls guide banner
-            guide_text = "[TAB] Switch Mode | Flick to THROW | [SPACE] Spawn | [R] Reset | [M] Mute | [ESC] Quit"
+            guide_text = "[TAB] Mode | Flick to THROW | [SPACE] Spawn | [R] Reset | [M] Mute | [ESC] Quit"
             render_surface.blit(fonts["small"].render(guide_text, True, (130, 160, 180)), (30, DEFAULT_WINDOW_HEIGHT - 35))
 
             # Blit with screen shake
@@ -296,7 +316,7 @@ def run(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P6")
+    parser = argparse.ArgumentParser(description="KINETIK Telekinesis Playground - Phase P7")
     parser.add_argument("--headless", action="store_true", help="Run in headless SDL mode")
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")

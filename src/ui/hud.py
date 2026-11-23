@@ -1,4 +1,4 @@
-"""Presentation HUD and telemetry renderer for Target Rush and Free Play."""
+"""Presentation HUD and telemetry renderer for Target Rush, Free Play, and Progression."""
 import math
 from typing import List
 import pygame
@@ -12,6 +12,7 @@ from src.config import (
     COLOR_WHITE_BRIGHT,
 )
 from src.game.modes import BaseGameMode, GameModeState, ModeType, TargetRushMode
+from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
 from src.physics.targets import TargetDrone
 
@@ -20,11 +21,12 @@ def render_game_hud(
     surface: pygame.Surface,
     mode: BaseGameMode,
     scoring: ScoringEngine,
+    progression: ProgressionManager,
     fonts: dict,
     screen_width: int,
     screen_height: int
 ) -> None:
-    """Renders real-time game mode HUD, timer countdown, combo multiplier, and score popups."""
+    """Renders real-time game mode HUD, timer countdown, combo multiplier, rank progress, and notifications."""
     title_font = fonts["title"]
     font = fonts["font"]
     big_font = fonts["big"]
@@ -33,6 +35,23 @@ def render_game_hud(
     # Top mode header
     mode_text = f"MODE: {mode.mode_type.value}"
     surface.blit(title_font.render(mode_text, True, COLOR_CYAN_GLOW), (30, 25))
+
+    # Player Rank & Progression Header
+    rank = progression.current_rank
+    rank_badge = f"RANK: {rank.name.upper()} ({progression.profile.total_xp:,} XP)"
+    surface.blit(small_font.render(rank_badge, True, COLOR_GOLD_AMBER), (30, 52))
+
+    # Rank Progress Mini-Bar (Width = 120px)
+    px, py = 30, 68
+    pygame.draw.rect(surface, (30, 40, 55), (px, py, 120, 4))
+    fill_px = int(120 * progression.rank_progress_fraction)
+    if fill_px > 0:
+        pygame.draw.rect(surface, COLOR_GOLD_AMBER, (px, py, fill_px, 4))
+
+    # Display recent unlocks / achievement banners
+    if progression.recent_unlocks:
+        latest = progression.recent_unlocks[-1]
+        surface.blit(small_font.render(latest, True, COLOR_GOLD_AMBER), (30, 78))
 
     if isinstance(mode, TargetRushMode):
         # 1. Round Timer Countdown
@@ -66,8 +85,7 @@ def render_game_hud(
 
         # 4. Round Over Victory / Summary Overlay
         if mode.state == GameModeState.ROUND_OVER:
-            # Darkened backdrop panel
-            panel_w, panel_h = 560, 320
+            panel_w, panel_h = 560, 340
             px = (screen_width - panel_w) // 2
             py = (screen_height - panel_h) // 2
 
@@ -77,12 +95,14 @@ def render_game_hud(
             surface.blit(panel_surf, (px, py))
             pygame.draw.rect(surface, COLOR_CYAN_GLOW, (px, py, panel_w, panel_h), 2)
 
-            surface.blit(big_font.render("ROUND COMPLETE", True, COLOR_GOLD_AMBER), (px + 140, py + 35))
-            surface.blit(font.render(f"FINAL SCORE: {scoring.score:,}", True, COLOR_WHITE_BRIGHT), (px + 60, py + 105))
-            surface.blit(font.render(f"TARGETS HIT: {scoring.total_hits}", True, COLOR_HUD_TEXT), (px + 60, py + 140))
-            surface.blit(font.render(f"MAX COMBO: {scoring.max_combo:.1f}x", True, COLOR_VIOLET_FLUX), (px + 60, py + 175))
+            surface.blit(big_font.render("ROUND COMPLETE", True, COLOR_GOLD_AMBER), (px + 160, py + 30))
+            surface.blit(font.render(f"FINAL SCORE: {scoring.score:,}", True, COLOR_WHITE_BRIGHT), (px + 60, py + 95))
+            surface.blit(font.render(f"BEST RECORD: {progression.profile.best_target_rush_score:,}", True, COLOR_GOLD_AMBER), (px + 60, py + 125))
+            surface.blit(font.render(f"TARGETS HIT: {scoring.total_hits}", True, COLOR_HUD_TEXT), (px + 60, py + 155))
+            surface.blit(font.render(f"MAX COMBO: {scoring.max_combo:.1f}x", True, COLOR_VIOLET_FLUX), (px + 60, py + 185))
+            surface.blit(font.render(f"RANK: {progression.current_rank.name} ({progression.profile.total_xp:,} XP)", True, COLOR_CYAN_GLOW), (px + 60, py + 215))
 
-            surface.blit(font.render("Press [R] or [SPACE] to Restart Round", True, COLOR_CYAN_GLOW), (px + 85, py + 245))
+            surface.blit(font.render("Press [R] or [SPACE] to Restart Round", True, COLOR_CYAN_GLOW), (px + 95, py + 280))
 
 
 def render_target_drones(surface: pygame.Surface, targets: List[TargetDrone]) -> None:
@@ -95,14 +115,10 @@ def render_target_drones(surface: pygame.Surface, targets: List[TargetDrone]) ->
         ty = int(drone.body.position.y)
         r = int(drone.radius)
 
-        # Outer glowing sensor ring
         pygame.draw.circle(surface, drone.color, (tx, ty), r + 4, 2)
-        # Inner body fill
         pygame.draw.circle(surface, drone.color, (tx, ty), r)
-        # Core white pupil
         pygame.draw.circle(surface, COLOR_WHITE_BRIGHT, (tx, ty), max(2, int(r * 0.35)))
 
-        # Rotating crosshair reticle ticks
         angle = drone.time_alive * 2.0
         for i in range(4):
             a = angle + (i * math.pi / 2.0)
