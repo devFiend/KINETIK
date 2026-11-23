@@ -7,6 +7,16 @@ import argparse
 import os
 import random
 import sys
+
+# Auto-detect and forward to local virtual environment if run from global python
+if sys.prefix == sys.base_prefix:
+    _venv_win = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "Scripts", "python.exe")
+    _venv_nix = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python")
+    _target_py = _venv_win if os.path.exists(_venv_win) else (_venv_nix if os.path.exists(_venv_nix) else None)
+    if _target_py and os.path.abspath(sys.executable).lower() != os.path.abspath(_target_py).lower():
+        import subprocess
+        sys.exit(subprocess.call([_target_py] + sys.argv))
+
 import cv2
 import pygame
 
