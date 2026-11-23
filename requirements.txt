@@ -1,0 +1,17 @@
+# KINETIK Dependencies
+# Core Computer Vision & AI Inference
+opencv-python>=4.10.0
+mediapipe>=1.2.0
+
+# Game Engine, Windowing & Audio (pygame-ce provides full SDL2 pygame API with Python 3.14 support)
+pygame-ce>=2.5.0
+
+# 2D Rigid-Body Physics Engine
+pymunk>=7.0.0
+
+# Mathematical Modeling, Coordinate Mapping & Signal Filters
+numpy>=2.0.0
+
+# Testing & Quality Assurance
+pytest>=8.0.0
+pytest-cov>=5.0.0
