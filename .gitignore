@@ -58,3 +58,6 @@ storage/*.bak
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Binary ML Models (auto-downloaded on first run)
+assets/models/*.task
