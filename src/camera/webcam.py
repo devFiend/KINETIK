@@ -17,13 +17,17 @@ class WebcamCapture:
 
     def __init__(
         self,
-        camera_index: int = DEFAULT_CAMERA_INDEX,
+        camera_index: object = DEFAULT_CAMERA_INDEX,
         width: int = DEFAULT_CAM_WIDTH,
         height: int = DEFAULT_CAM_HEIGHT,
         mirror: bool = DEFAULT_MIRROR_MODE,
         mock_mode: bool = False,
     ):
-        self.camera_index = camera_index
+        # Allow integer indices or stream URLs (e.g. http://, rtsp://)
+        if isinstance(camera_index, str) and camera_index.isdigit():
+            self.camera_index = int(camera_index)
+        else:
+            self.camera_index = camera_index
         self.target_width = width
         self.target_height = height
         self.mirror = mirror
@@ -53,6 +57,23 @@ class WebcamCapture:
     def fps(self) -> float:
         return self._fps
 
+    @staticmethod
+    def list_available_cameras(max_tested: int = 6) -> list:
+        """Scan local system for active video capture devices."""
+        found = []
+        api = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
+        for idx in range(max_tested):
+            try:
+                cap = cv2.VideoCapture(idx, api)
+                if cap and cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        found.append(idx)
+                    cap.release()
+            except Exception:
+                pass
+        return found
+
     def start(self) -> bool:
         """Start the background capture worker."""
         if self._running:
@@ -65,8 +86,10 @@ class WebcamCapture:
             self._thread.start()
             return True
 
-        # On Windows, DirectShow (CAP_DSHOW) initializes much faster than MSMF
-        api_preference = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
+        # On Windows, DirectShow (CAP_DSHOW) initializes hardware webcams faster
+        # If camera_index is a stream URL (http:// or rtsp://), use default/FFmpeg backend
+        is_url = isinstance(self.camera_index, str) and ("://" in self.camera_index)
+        api_preference = cv2.CAP_ANY if is_url else (cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY)
 
         try:
             self._cap = cv2.VideoCapture(self.camera_index, api_preference)
@@ -76,7 +99,7 @@ class WebcamCapture:
 
             if not self._cap.isOpened():
                 self._is_available = False
-                self._error_message = f"Could not open camera at index {self.camera_index}"
+                self._error_message = f"Could not open camera at {self.camera_index}"
                 return False
 
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.target_width)

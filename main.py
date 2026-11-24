@@ -67,8 +67,8 @@ def run(
     headless: bool = False,
     max_frames: int = 0,
     mock_camera: bool = False,
-    camera_index: int = DEFAULT_CAMERA_INDEX,
-    start_mode: str = "target_rush"
+    camera_index: object = DEFAULT_CAMERA_INDEX,
+    start_mode: str = "ragdoll"
 ) -> int:
     """Initialize camera, vision, physics, game modes, progression, and Pygame lifecycle."""
     if headless:
@@ -452,9 +452,21 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run in headless SDL mode")
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")
-    parser.add_argument("--camera", type=int, default=DEFAULT_CAMERA_INDEX, help="Camera device index")
+    parser.add_argument("--camera", type=str, default=str(DEFAULT_CAMERA_INDEX), help="Camera index (0, 1, 2) or stream URL (http://..., rtsp://...)")
+    parser.add_argument("--list-cameras", action="store_true", help="Scan and list detected camera devices")
     parser.add_argument("--mode", type=str, default="ragdoll", choices=["ragdoll", "target_rush", "free_play", "stack"], help="Game mode")
     args = parser.parse_args()
+
+    if args.list_cameras:
+        print("[KINETIK] Scanning for connected camera devices...")
+        cams = WebcamCapture.list_available_cameras()
+        if cams:
+            print(f"[KINETIK] Found {len(cams)} camera device(s): {cams}")
+            for c in cams:
+                print(f"  -> Camera index: {c} (Run with: python main.py --camera {c})")
+        else:
+            print("[KINETIK] No active physical camera devices detected.")
+        return 0
 
     return run(
         headless=args.headless,
