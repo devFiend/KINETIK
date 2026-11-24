@@ -108,6 +108,12 @@ class TelekinesisController:
 
         return nearest_body, min_distance
 
+    def release_body(self, body: pymunk.Body) -> None:
+        """Force-release a body if any hand is currently holding it."""
+        for tk in self._hands.values():
+            if tk.held_body is body:
+                tk.release((0.0, 0.0))
+
     def update(self, gesture_states: List[HandGestureState], now: Optional[float] = None) -> None:
         """
         Process gesture states for active hands to manage grab, hold, throw, and push.
@@ -120,6 +126,13 @@ class TelekinesisController:
             tk = self._get_hand_telekinesis(state.handedness)
             tk.last_seen_time = t
             tk.last_cursor_pos = state.screen_pos
+
+            # If held body was removed or destroyed externally, detach cleanly
+            if tk.is_holding and tk.held_body not in self.physics_world.space.bodies:
+                if tk.joint:
+                    tk.joint.detach()
+                    tk.joint = None
+                tk.held_body = None
 
             # 1. Grab Trigger: Whenever fingers are pinched and not already holding, grab nearest body within reach!
             if state.is_pinched and not tk.is_holding:

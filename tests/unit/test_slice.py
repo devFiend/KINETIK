@@ -57,3 +57,34 @@ def test_kinetic_blade_target_drone_destruction():
     assert len(results) == 1
     assert results[0].sliced_target is True
     assert target.alive is False
+
+
+def test_kinetic_blade_slicing_held_body():
+    """Verify slicing an object that is currently held by telekinesis detaches joints cleanly."""
+    from src.game.controller import TelekinesisController
+    world = PhysicsWorld(1280, 720)
+    controller = TelekinesisController(world)
+    blade = KineticBlade(world.space, telekinesis_controller=controller)
+
+    sphere = world.spawn_sphere(500.0, 300.0, radius=30.0)
+
+    # Hand 1 grabs the sphere
+    grab_hand = HandGestureState("Left")
+    grab_hand.is_pinched = True
+    grab_hand.screen_pos = (500.0, 300.0)
+    controller.update([grab_hand], now=1.0)
+    assert len(controller.get_active_holds()) > 0
+
+    # Hand 2 rapidly slices through the held sphere
+    slice_hand = HandGestureState("Right")
+    slice_hand.is_pinched = False
+    slice_hand.screen_pos = (550.0, 300.0)
+    slice_hand.velocity = (1600.0, 0.0)
+    slice_hand.speed = 1600.0
+
+    # Must execute cleanly without assertion error or dangling constraints
+    results = blade.process_hand_slicing(slice_hand, dt=1.0 / 60.0, now=1.1)
+    assert len(results) == 1
+    assert len(results[0].new_bodies) == 2
+    assert len(controller.get_active_holds()) == 0
+

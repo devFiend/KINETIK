@@ -120,11 +120,23 @@ class PhysicsWorld:
         """Remove all dynamic bodies and their attached shapes/constraints."""
         for body in list(self.space.bodies):
             if body.body_type == pymunk.Body.DYNAMIC:
-                for shape in list(body.shapes):
-                    self.space.remove(shape)
                 for constraint in list(body.constraints):
-                    self.space.remove(constraint)
-                self.space.remove(body)
+                    if constraint in self.space.constraints:
+                        try:
+                            self.space.remove(constraint)
+                        except Exception:
+                            pass
+                for shape in list(body.shapes):
+                    if shape in self.space.shapes:
+                        try:
+                            self.space.remove(shape)
+                        except Exception:
+                            pass
+                if body in self.space.bodies:
+                    try:
+                        self.space.remove(body)
+                    except Exception:
+                        pass
 
     def reset_default_playground(self) -> None:
         """Clear dynamic objects and spawn a balanced starter set of physics props."""

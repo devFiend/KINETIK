@@ -147,7 +147,7 @@ def run(
     current_mode.start()
 
     # KINETIK 2.0: Kinetic Blade Slicing Engine
-    kinetic_blade = KineticBlade(physics_world.space)
+    kinetic_blade = KineticBlade(physics_world.space, telekinesis_controller=telekinesis_controller)
     last_checkpoint_tier_announced = 0
 
     # Wire collision events for prop impacts

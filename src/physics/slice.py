@@ -39,8 +39,9 @@ class KineticBlade:
     through dynamic props and target drones.
     """
 
-    def __init__(self, space: pymunk.Space):
+    def __init__(self, space: pymunk.Space, telekinesis_controller: Optional[object] = None):
         self.space = space
+        self.telekinesis_controller = telekinesis_controller
         self.last_slice_time: float = 0.0
         self.cooldown_sec: float = 0.10  # 100ms cut cooldown to prevent duplicate frame hits
         self.active_trails: List[Tuple[Tuple[float, float], Tuple[float, float], float]] = []
@@ -225,8 +226,28 @@ class KineticBlade:
 
     def _remove_body(self, body: pymunk.Body) -> None:
         """Safely detach and remove a body and all attached shapes/constraints."""
-        for shape in list(body.shapes):
-            self.space.remove(shape)
+        if self.telekinesis_controller and hasattr(self.telekinesis_controller, "release_body"):
+            try:
+                self.telekinesis_controller.release_body(body)
+            except Exception:
+                pass
+
         for constraint in list(body.constraints):
-            self.space.remove(constraint)
-        self.space.remove(body)
+            if constraint in self.space.constraints:
+                try:
+                    self.space.remove(constraint)
+                except Exception:
+                    pass
+
+        for shape in list(body.shapes):
+            if shape in self.space.shapes:
+                try:
+                    self.space.remove(shape)
+                except Exception:
+                    pass
+
+        if body in self.space.bodies:
+            try:
+                self.space.remove(body)
+            except Exception:
+                pass
