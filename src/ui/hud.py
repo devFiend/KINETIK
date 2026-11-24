@@ -13,6 +13,7 @@ from src.config import (
     COLOR_WHITE_BRIGHT,
 )
 from src.game.modes import BaseGameMode, GameModeState, ModeType, TargetRushMode
+from src.game.ragdoll_mode import RagdollGodMode
 from src.game.stack_mode import TheStackMode
 from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
@@ -183,6 +184,40 @@ def render_game_hud(
             banner_surf = big_font.render(banner_text, True, COLOR_GOLD_AMBER)
             bx = (screen_width - banner_surf.get_width()) // 2
             surface.blit(banner_surf, (bx, 140))
+
+    elif isinstance(mode, RagdollGodMode):
+        # 1. Coins Counter
+        coin_text = f"COINS: {mode.coins:,}"
+        surface.blit(big_font.render(coin_text, True, COLOR_GOLD_AMBER), (screen_width - 260, 22))
+
+        # 2. Combo Multiplier
+        mult_text = f"{mode.combo:.1f}x COMBO"
+        mult_color = COLOR_VIOLET_FLUX if mode.combo >= 3.0 else COLOR_CYAN_GLOW
+        surface.blit(font.render(mult_text, True, mult_color), (screen_width - 260, 62))
+
+        # Combo decay bar
+        if mode.combo_timer > 0.0:
+            gw = 140
+            pygame.draw.rect(surface, (40, 50, 70), (screen_width - 260, 88, gw, 6))
+            fw = int(gw * min(1.0, mode.combo_timer / 2.5))
+            if fw > 0:
+                pygame.draw.rect(surface, mult_color, (screen_width - 260, 88, fw, 6))
+
+        # 3. Buddy Mood / Expression
+        if mode.ragdoll:
+            mood_str = f"BUDDY: {mode.ragdoll.expression.name}"
+            surface.blit(small_font.render(mood_str, True, COLOR_WHITE_BRIGHT), (screen_width - 260, 104))
+
+        # 4. Floating scores
+        for fs in scoring.floating_scores:
+            pop_surf = font.render(f"+{fs.points}", True, fs.color)
+            surface.blit(pop_surf, (int(fs.x), int(fs.y)))
+
+        # 5. Trick Popup Banner
+        if mode.recent_trick:
+            tr_surf = big_font.render(f"★ {mode.recent_trick.name} +{mode.recent_trick.points} ★", True, mode.recent_trick.color)
+            tx = (screen_width - tr_surf.get_width()) // 2
+            surface.blit(tr_surf, (tx, 130))
 
 
 def render_target_drones(surface: pygame.Surface, targets: List[TargetDrone]) -> None:

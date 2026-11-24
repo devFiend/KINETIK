@@ -43,11 +43,13 @@ from src.game.audio import ProceduralAudioEngine
 from src.game.controller import TelekinesisController
 from src.game.dual_hand import DualHandSuperpower, DualHandSynthesizer
 from src.game.modes import FreePlayMode, GameModeState, ModeType, TargetRushMode
+from src.game.ragdoll_mode import RagdollGodMode
 from src.game.stack_mode import TheStackMode
 from src.game.progression import ProgressionManager
 from src.game.scoring import ScoringEngine
 from src.gestures.detector import GestureDetector, GestureType
 from src.physics.collisions import CollisionEvent
+from src.physics.ragdoll import RagdollExpression
 from src.physics.slice import KineticBlade
 from src.physics.world import PhysicsWorld
 from src.rendering.cursor import render_all_cursors
@@ -55,6 +57,7 @@ from src.rendering.effects import ScreenShake
 from src.rendering.landmarks import render_hand_skeleton
 from src.rendering.particles import ParticlePool
 from src.rendering.physics_renderer import render_physics_bodies
+from src.rendering.ragdoll_renderer import render_contraptions, render_ragdoll
 from src.rendering.tether import render_energy_tether
 from src.storage.save_manager import SaveManager
 from src.ui.hud import render_blade_trails, render_game_hud, render_target_drones
@@ -131,20 +134,25 @@ def run(
     # Phase P6 & 2.0: Scoring & Game Modes
     print("[KINETIK] Initializing Scoring Engine & Game Modes...")
     scoring_engine = ScoringEngine()
+    ragdoll_mode = RagdollGodMode(physics_world, scoring_engine)
     free_play_mode = FreePlayMode(physics_world, scoring_engine)
     target_rush_mode = TargetRushMode(physics_world, scoring_engine, round_duration_sec=60.0)
     stack_mode = TheStackMode(physics_world, scoring_engine)
 
-    available_modes = [free_play_mode, target_rush_mode, stack_mode]
+    available_modes = [ragdoll_mode, free_play_mode, target_rush_mode, stack_mode]
     if start_mode.lower() == "stack":
-        mode_idx = 2
+        mode_idx = 3
     elif start_mode.lower() == "target_rush":
+        mode_idx = 2
+    elif start_mode.lower() == "free_play":
         mode_idx = 1
     else:
-        mode_idx = 0
+        mode_idx = 0  # Ragdoll God is the default!
 
     current_mode = available_modes[mode_idx]
     current_mode.start()
+    prev_ragdoll_expr = None
+    last_handled_trick = None
 
     # KINETIK 2.0: Kinetic Blade Slicing Engine
     kinetic_blade = KineticBlade(physics_world.space, telekinesis_controller=telekinesis_controller)
@@ -281,6 +289,27 @@ def run(
                     screen_shake.add_trauma(0.25)
                     particle_pool.emit_burst(DEFAULT_WINDOW_WIDTH * 0.5, 200.0, count=36, color=COLOR_GOLD_AMBER)
 
+            # Ragdoll comedic voice and contraption audio
+            if isinstance(current_mode, RagdollGodMode) and current_mode.ragdoll:
+                rag = current_mode.ragdoll
+                if rag.expression == RagdollExpression.PANIC_SCREAM and prev_ragdoll_expr != RagdollExpression.PANIC_SCREAM:
+                    audio_engine.play_screeeam()
+                elif rag.expression == RagdollExpression.DIZZY and prev_ragdoll_expr != RagdollExpression.DIZZY:
+                    audio_engine.play_oof()
+                    screen_shake.add_trauma(0.3)
+                prev_ragdoll_expr = rag.expression
+
+                if current_mode.recent_trick and current_mode.recent_trick != last_handled_trick:
+                    last_handled_trick = current_mode.recent_trick
+                    if "BUMPER" in current_mode.recent_trick.name:
+                        audio_engine.play_bumper_ping()
+                        screen_shake.add_trauma(0.25)
+                    elif "TRAMPOLINE" in current_mode.recent_trick.name:
+                        audio_engine.play_boing()
+                        screen_shake.add_trauma(0.2)
+                    elif "PORTAL" in current_mode.recent_trick.name:
+                        audio_engine.play_portal_warp()
+
             # 5. Game Mode & Scoring Update
             current_mode.update(dt)
             scoring_engine.update(dt)
@@ -319,6 +348,18 @@ def run(
             # Draw target drones if in Target Rush
             if isinstance(current_mode, TargetRushMode):
                 render_target_drones(render_surface, current_mode.targets)
+
+            # Draw Ragdoll contraptions and character
+            if isinstance(current_mode, RagdollGodMode):
+                render_contraptions(
+                    render_surface,
+                    current_mode.bumpers,
+                    current_mode.portals,
+                    current_mode.trampoline,
+                    now=frame_ts
+                )
+                if current_mode.ragdoll:
+                    render_ragdoll(render_surface, current_mode.ragdoll)
 
             # Check targeted body near hand cursor
             targeted_body = None
@@ -383,7 +424,7 @@ def run(
                 DEFAULT_WINDOW_HEIGHT
             )
 
-            guide_text = "[TAB] Mode | Flick to THROW | [SPACE] Spawn | [R] Reset | [M] Mute | [ESC] Quit"
+            guide_text = "[TAB] Mode | Grab & Fling Buddy | [SPACE] Spawn | [R] Reset | [M] Mute | [ESC] Quit"
             render_surface.blit(fonts["small"].render(guide_text, True, (130, 160, 180)), (30, DEFAULT_WINDOW_HEIGHT - 35))
 
             # Blit with screen shake
@@ -412,7 +453,7 @@ def main():
     parser.add_argument("--test-frames", type=int, default=0, help="Run for N frames and exit")
     parser.add_argument("--mock-camera", action="store_true", help="Use synthetic mock video generator")
     parser.add_argument("--camera", type=int, default=DEFAULT_CAMERA_INDEX, help="Camera device index")
-    parser.add_argument("--mode", type=str, default="target_rush", choices=["target_rush", "free_play", "stack"], help="Game mode")
+    parser.add_argument("--mode", type=str, default="ragdoll", choices=["ragdoll", "target_rush", "free_play", "stack"], help="Game mode")
     args = parser.parse_args()
 
     return run(

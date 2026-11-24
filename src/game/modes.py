@@ -12,6 +12,7 @@ from src.physics.world import PhysicsWorld
 
 
 class ModeType(Enum):
+    RAGDOLL_GOD = "Ragdoll God (Interactive Sandbox)"
     FREE_PLAY = "Free Play (Sandbox)"
     TARGET_RUSH = "Target Rush (60s Arcade)"
     THE_STACK = "The Stack (Zen Tower Balance)"

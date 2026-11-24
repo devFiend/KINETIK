@@ -151,6 +151,94 @@ class ProceduralAudioEngine:
             self._vortex_sound.set_volume(self.volume * 0.8)
             self._vortex_sound.play()
 
+    def play_screeeam(self) -> None:
+        """Synthesize hilarious cartoon falling scream (WHEEE/AAAAAH!)."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.55
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            # Pitch slide down with vibrato
+            freq = np.linspace(950.0, 320.0, len(t)) + np.sin(2.0 * np.pi * 14.0 * t) * 45.0
+            env = np.sin(np.pi * t / dur) ** 0.8
+            wave = (np.sin(2.0 * np.pi * freq * t) * env * 0.45 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.8)
+            sound.play()
+        except Exception:
+            pass
+
+    def play_oof(self) -> None:
+        """Synthesize comedic blunt impact grunt ('OOF!')."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.16
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            freq = np.linspace(160.0, 75.0, len(t))
+            env = np.exp(-t * 24.0)
+            wave = (np.sin(2.0 * np.pi * freq * t) * env * 0.6 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.85)
+            sound.play()
+        except Exception:
+            pass
+
+    def play_bumper_ping(self) -> None:
+        """Synthesize high-resonant arcade pinball bumper bell ('DINGGG!')."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.40
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            env = np.exp(-t * 8.0)
+            tone1 = np.sin(2.0 * np.pi * 1760.0 * t)
+            tone2 = np.sin(2.0 * np.pi * 3520.0 * t) * 0.35
+            wave = ((tone1 + tone2) * env * 0.5 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.9)
+            sound.play()
+        except Exception:
+            pass
+
+    def play_boing(self) -> None:
+        """Synthesize cartoon spring trampoline bounce ('BOIIING!')."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.32
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            freq = 180.0 + np.sin(2.0 * np.pi * 26.0 * t) * 110.0 + np.linspace(0.0, 220.0, len(t))
+            env = np.exp(-t * 6.0)
+            wave = (np.sin(2.0 * np.pi * freq * t) * env * 0.55 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.85)
+            sound.play()
+        except Exception:
+            pass
+
+    def play_portal_warp(self) -> None:
+        """Synthesize sci-fi cosmic dimensional warp whoosh."""
+        if not self._initialized or self.muted:
+            return
+        try:
+            dur = 0.28
+            t = np.linspace(0.0, dur, int(self.sample_rate * dur), endpoint=False)
+            freq = np.linspace(300.0, 1200.0, len(t))
+            env = np.sin(np.pi * t / dur)
+            noise = np.random.uniform(-0.15, 0.15, len(t))
+            wave = ((np.sin(2.0 * np.pi * freq * t) + noise) * env * 0.45 * 32767).astype(np.int16)
+            stereo = np.column_stack((wave, wave))
+            sound = pygame.sndarray.make_sound(stereo)
+            sound.set_volume(self.volume * 0.8)
+            sound.play()
+        except Exception:
+            pass
+
     def play_throw(self, speed: float) -> None:
         """Synthesize dynamic whoosh pitch-scaled to throw velocity."""
         if not self._initialized or self.muted:
